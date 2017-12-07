@@ -73,8 +73,6 @@ def read_big_csv(inputfile):
     df = pd.concat(chunks, ignore_index=True)
     return df
 
-def preprocess_text
-
 # main
 
 # timebf = time.time()
