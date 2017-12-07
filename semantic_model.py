@@ -42,14 +42,15 @@ if outputfile == '':
     print('option [-o] must be set\n')
     sys.exit()
 
-# Start
 print('Vector input: ' + vectorfile)
 print('Raw input: ' + rawfile)
 print('Blob column: ' + blobcolumn) # check later if cast is needed
 print('Output file: ' + outputfile)
 
+# Start
+
 def read_big_csv(inputfile):
-    import pandas as pd
+    print("reading data...")
     with open(inputfile,'r') as f:
         a = f.readline()
     csvlist = a.split(',')
@@ -72,9 +73,11 @@ def read_big_csv(inputfile):
     df = pd.concat(chunks, ignore_index=True)
     return df
 
+def preprocess_text
+
 # main
 
-timebf = time.time()
+# timebf = time.time()
 # hiD vector file
 vec_frame = read_big_csv(vectorfile)
 len_vec_frame = len(vec_frame.index)
@@ -88,19 +91,27 @@ if (len_vec_frame != len_raw_frame):
 if (blobcolumn != ''):
     from nltk.corpus import stopwords
     from nltk.tokenize import word_tokenize
-    stop_words = set(stopwords.words('english'))
-    # print(type(blobcolumn))
+    from sklearn.feature_extraction.text import CountVectorizer
+
+    raw_frame[blobcolumn] = raw_frame[blobcolumn].fillna('')
+    print(raw_frame[blobcolumn])
+    vectorizer = CountVectorizer(stop_words='english', ngram_range=(1,3))
+    X = vectorizer.fit_transform(raw_frame[blobcolumn])
+    M = X.toarray()
     for index, row in raw_frame.iterrows():
-        if not pd.isnull(row[blobcolumn]):
-            words = word_tokenize(str(row[blobcolumn]).lower().translate(str.maketrans('','',string.punctuation)))
-            raw_frame.set_value(index, blobcolumn, [word for word in words if not word in stop_words])
-    # raw_frame['bow'] = [word for word in raw_frame.bow if not word in stop_words]
-
-print(raw_frame.head())
-
-timeaf = time.time()
-print('TIME: ',timeaf-timebf)
+        raw_frame.set_value(index, blobcolumn, M[index])
+    # print(vec_frame.shape)
+    # print(X.shape)
+    vec_frame['bow'] = list(X.toarray())
+    vocab = vectorizer.get_feature_names()
+    print(type(vocab))
+    vocabfile = open('vocab.tsv', 'w')
+    for item in vocab:
+        vocabfile.write("%s\n" % item)
+# timeaf = time.time()
+# print('TIME: ',timeaf-timebf)
 raw_frame.to_csv(outputfile, sep = '\t', index = False)
+vec_frame.to_csv('bow_'+vectorfile, sep = '\t', index = False)
 
 # frame = pd.merge(frame,  feature_frame, how = 'left', on = frame.columns[0])
 # frame.to_csv(outputfile, sep = '\t', index = False)
