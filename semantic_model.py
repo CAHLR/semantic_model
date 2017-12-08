@@ -73,6 +73,23 @@ def read_big_csv(inputfile):
     df = pd.concat(chunks, ignore_index=True)
     return df
 
+def process_text(dataframe, column):
+    from nltk.corpus import stopwords
+    from nltk.tokenize import word_tokenize
+    from sklearn.feature_extraction.text import CountVectorizer
+
+    dataframe[column] = dataframe[column].fillna('')
+    vectorizer = CountVectorizer(stop_words='english', ngram_range=(1,3))
+    X = vectorizer.fit_transform(dataframe[column])
+    vocab = vectorizer.get_feature_names()
+    write_vocab_file(vocab)
+    return X
+
+def write_vocab_file(vocab):
+    vocabfile = open('vocab.tsv', 'w')
+    for item in vocab:
+        vocabfile.write("%s\n" % item)
+
 # main
 
 # timebf = time.time()
@@ -87,25 +104,30 @@ if (len_vec_frame != len_raw_frame):
     sys.exit()
 
 if (blobcolumn != ''):
-    from nltk.corpus import stopwords
-    from nltk.tokenize import word_tokenize
-    from sklearn.feature_extraction.text import CountVectorizer
-
-    raw_frame[blobcolumn] = raw_frame[blobcolumn].fillna('')
-    print(raw_frame[blobcolumn])
-    vectorizer = CountVectorizer(stop_words='english', ngram_range=(1,3))
-    X = vectorizer.fit_transform(raw_frame[blobcolumn])
+    X = process_text(raw_frame, blobcolumn)
     M = X.toarray()
     for index, row in raw_frame.iterrows():
         raw_frame.set_value(index, blobcolumn, M[index])
+    vec_frame['bow'] = list(X.toarray())
+    # from nltk.corpus import stopwords
+    # from nltk.tokenize import word_tokenize
+    # from sklearn.feature_extraction.text import CountVectorizer
+
+    # raw_frame[blobcolumn] = raw_frame[blobcolumn].fillna('')
+    # print(raw_frame[blobcolumn])
+    # vectorizer = CountVectorizer(stop_words='english', ngram_range=(1,3))
+    # X = vectorizer.fit_transform(raw_frame[blobcolumn])
+    # M = X.toarray()
+    # for index, row in raw_frame.iterrows():
+    #     raw_frame.set_value(index, blobcolumn, M[index])
     # print(vec_frame.shape)
     # print(X.shape)
-    vec_frame['bow'] = list(X.toarray())
-    vocab = vectorizer.get_feature_names()
-    print(type(vocab))
-    vocabfile = open('vocab.tsv', 'w')
-    for item in vocab:
-        vocabfile.write("%s\n" % item)
+    # vec_frame['bow'] = list(X.toarray())
+    # vocab = vectorizer.get_feature_names()
+    # print(type(vocab))
+    # vocabfile = open('vocab.tsv', 'w')
+    # for item in vocab:
+    #     vocabfile.write("%s\n" % item)
 # timeaf = time.time()
 # print('TIME: ',timeaf-timebf)
 raw_frame.to_csv(outputfile, sep = '\t', index = False)
