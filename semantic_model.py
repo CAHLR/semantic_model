@@ -5,12 +5,15 @@ import time
 import pandas as pd
 import numpy as np
 import nltk
+from sklearn.feature_extraction.text import CountVectorizer
 import string
+
 
 vectorfile = ''
 rawfile = ''
 blobcolumn = ''
 outputfile = ''
+vocabsize = 0
 
 try:
     opts, args = getopt.getopt(sys.argv[1:], 'h:v:r:b:o:')
@@ -50,7 +53,7 @@ print('Output file: ' + outputfile)
 # Start
 
 def read_big_csv(inputfile):
-    print("reading data...")
+    print("Reading "+inputfile+"...")
     with open(inputfile,'r') as f:
         a = f.readline()
     csvlist = a.split(',')
@@ -73,10 +76,9 @@ def read_big_csv(inputfile):
     df = pd.concat(chunks, ignore_index=True)
     return df
 
-def process_text(dataframe, column):
+def get_vocab(dataframe, column):
     from nltk.corpus import stopwords
     from nltk.tokenize import word_tokenize
-    from sklearn.feature_extraction.text import CountVectorizer
 
     dataframe[column] = dataframe[column].fillna('')
     vectorizer = CountVectorizer(stop_words='english', ngram_range=(1,1))
@@ -91,39 +93,58 @@ def process_text(dataframe, column):
 
     vocab = np.concatenate((unigrams, bigrams, trigrams))
     write_vocab_file(vocab)
+    return vocab
 
+
+def to_bag_of_words(dataframe, column, vocab):
     vectorizer = CountVectorizer(stop_words='english', vocabulary=vocab)
     X = vectorizer.fit_transform(dataframe[column])
     return X
 
 def write_vocab_file(vocab):
-    vocabfile = open('vocab.tsv', 'w')
+    vocabfile = open(outputfile+'_vocab.tsv', 'w')
     for item in vocab:
         vocabfile.write("%s\n" % item)
 
-# main
+def logistic_regression(X, Y):
+    from keras.layers import Input, Dense
+    from keras.models import Model
+    inputs = Input(shape=(X.shape[1],))
+    predictions = Dense(vocabsize, activation='softmax')(inputs)
+    model = Model(inputs=inputs, outputs=predictions)
+    model.compile(optimizer='rmsprop',
+              loss='categorical_crossentropy',
+              metrics=['accuracy'])
+    model.fit(X, Y)
+    weights = model.layers[1].get_weights()[0]
+    biases = model.layers[1].get_weights()[1]
+    pd.DataFrame(weights).to_csv(outputfile+'_weights.tsv', sep = '\t', index = False)
+    pd.DataFrame(biases).to_csv(outputfile+'_biases.tsv', sep = '\t', index = False)
 
-# timebf = time.time()
-# hiD vector file
+# main
+timebf = time.time()
+
+# get data
 vec_frame = read_big_csv(vectorfile)
 len_vec_frame = len(vec_frame.index)
-# raw file
 raw_frame = read_big_csv(rawfile)
 len_raw_frame = len(raw_frame.index)
+
 if (len_vec_frame != len_raw_frame):
     print('vector file and raw file entries do not line up\n')
     sys.exit()
 
 if (blobcolumn != ''):
-    X = process_text(raw_frame, blobcolumn)
+    print("Performing text processing...")
+    vocab = get_vocab(raw_frame, blobcolumn)
+    vocabsize = len(vocab)
+    X = to_bag_of_words(raw_frame, blobcolumn, vocab)
     M = X.toarray()
     for index, row in raw_frame.iterrows():
-        raw_frame.set_value(index, blobcolumn, M[index])
-    vec_frame['bow'] = list(X.toarray())
-# timeaf = time.time()
-# print('TIME: ',timeaf-timebf)
-raw_frame.to_csv(outputfile, sep = '\t', index = False)
-vec_frame.to_csv('bow_'+vectorfile, sep = '\t', index = False)
-
-# frame = pd.merge(frame,  feature_frame, how = 'left', on = frame.columns[0])
-# frame.to_csv(outputfile, sep = '\t', index = False)
+        raw_frame.at[index, blobcolumn] = M[index]
+    logistic_regression(vec_frame.iloc[:,1:], M)
+    vec_frame['bow'] = list(M)
+raw_frame.to_csv(outputfile+'.tsv', sep = '\t', index = False)
+vec_frame.to_csv(outputfile+'_bow_'+vectorfile, sep = '\t', index = False)
+timeaf = time.time()
+print('TIME: ',timeaf-timebf)
