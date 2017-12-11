@@ -1,4 +1,3 @@
-# import os
 import sys
 import getopt
 import time
@@ -47,7 +46,7 @@ if outputfile == '':
 
 print('Vector input: ' + vectorfile)
 print('Raw input: ' + rawfile)
-print('Blob column: ' + blobcolumn) # check later if cast is needed
+print('Blob column: ' + blobcolumn)
 print('Output file: ' + outputfile)
 
 # Start
@@ -92,19 +91,13 @@ def get_vocab(dataframe, column):
     trigrams = vectorizer.get_feature_names()
 
     vocab = np.concatenate((unigrams, bigrams, trigrams))
-    write_vocab_file(vocab)
+    pd.DataFrame(vocab).to_csv(outputfile+'_vocab.tsv', sep = '\t', index = False)
     return vocab
-
 
 def to_bag_of_words(dataframe, column, vocab):
     vectorizer = CountVectorizer(stop_words='english', vocabulary=vocab)
     X = vectorizer.fit_transform(dataframe[column])
     return X
-
-def write_vocab_file(vocab):
-    vocabfile = open(outputfile+'_vocab.tsv', 'w')
-    for item in vocab:
-        vocabfile.write("%s\n" % item)
 
 def logistic_regression(X, Y):
     from keras.layers import Input, Dense
