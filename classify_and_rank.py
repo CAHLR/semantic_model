@@ -112,16 +112,17 @@ print(avg_vector)
 mul = avg_vector.dot(weights_frame.values)
 print('mul')
 print(mul)
-# result = np.array(mul.add(biases_frame.values).iloc[0,:])
 result = mul.add(biases_frame.values).iloc[0,:]
 print('add')
 print(result)
 print('b')
 top_prob_words = result.argsort()[-10:][::-1]
 print(top_prob_words)
+outputfile = open(outputfile+'_top10words.txt', 'w')
 for index in top_prob_words:
     print(index)
-    print(vocab_frame.iloc[index], result.iloc[index])
+    print(vocab_frame.iloc[index,0], result.iloc[index])
+    outputfile.write("%s\n" % vocab_frame.iloc[index,0])
 
 
 timeaf = time.time()
