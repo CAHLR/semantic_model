@@ -13,6 +13,7 @@ rawfile = ''
 blobcolumn = ''
 outputfile = ''
 vocabsize = 0
+num_top_words = 10 # hardcode for now
 
 try:
     opts, args = getopt.getopt(sys.argv[1:], 'h:v:r:b:o:')
@@ -76,6 +77,7 @@ def read_big_csv(inputfile):
     return df
 
 def get_vocab(dataframe, column):
+    print("Getting vocab...")
     from nltk.corpus import stopwords
     from nltk.tokenize import word_tokenize
 
@@ -96,10 +98,11 @@ def get_vocab(dataframe, column):
 
 def to_bag_of_words(dataframe, column, vocab):
     vectorizer = CountVectorizer(stop_words='english', vocabulary=vocab)
-    X = vectorizer.fit_transform(dataframe[column])
+    X = vectorizer.fit_transform(dataframe[column].values.astype('U'))
     return X
 
 def logistic_regression(X, Y):
+    print('Performing logistic regression...')
     from keras.layers import Input, Dense
     from keras.models import Model
     inputs = Input(shape=(X.shape[1],))
@@ -111,8 +114,11 @@ def logistic_regression(X, Y):
     model.fit(X, Y)
     weights = model.layers[1].get_weights()[0]
     biases = model.layers[1].get_weights()[1]
-    pd.DataFrame(weights).to_csv(outputfile+'_weights.tsv', sep = '\t', index = False)
-    pd.DataFrame(biases).to_csv(outputfile+'_biases.tsv', sep = '\t', index = False)
+    weights_frame = pd.DataFrame(weights)
+    biases_frame = pd.DataFrame(biases)
+    weights_frame.to_csv(outputfile+'_weights.tsv', sep = '\t', index = False)
+    biases_frame.to_csv(outputfile+'_biases.tsv', sep = '\t', index = False)
+    return(weights_frame, biases)
 
 # main
 timebf = time.time()
@@ -128,15 +134,33 @@ if (len_vec_frame != len_raw_frame):
     sys.exit()
 
 if (blobcolumn != ''):
-    print("Performing text processing...")
-    vocab = get_vocab(raw_frame, blobcolumn)
+    try:
+        vocab_frame = read_big_csv(outputfile+'_vocab.tsv')
+        vocab = vocab_frame.values.flatten()
+    except:
+        vocab = get_vocab(raw_frame, blobcolumn)
+        vocab_frame = pd.DataFrame(vocab)
     vocabsize = len(vocab)
     X = to_bag_of_words(raw_frame, blobcolumn, vocab)
     M = X.toarray()
     for index, row in raw_frame.iterrows():
         raw_frame.at[index, blobcolumn] = M[index]
-    logistic_regression(vec_frame.iloc[:,1:], M)
+    try:
+        weights_frame = read_big_csv(outputfile+'_weights.tsv')
+        biases = read_big_csv(outputfile+'_biases.tsv').iloc[:,0]
+    except:
+        (weights_frame, biases) = logistic_regression(vec_frame.iloc[:,1:], M)
+    vectors_frame = vec_frame.iloc[:,1:]
+    result_frame = vectors_frame.dot(weights_frame.values)
+    result_frame += biases
+    sorted_frame = np.argsort(result_frame,axis=1).iloc[:,-num_top_words:]
+
+    for i in range(num_top_words):
+        new_col = vocab_frame.iloc[sorted_frame.iloc[:,i],0] # get the ith top vocab word for each entry
+        raw_frame['predicted_word_' + str(num_top_words-i)] = new_col.values
+
     vec_frame['bow'] = list(M)
+
 raw_frame.to_csv(outputfile+'.tsv', sep = '\t', index = False)
 vec_frame.to_csv(outputfile+'_bow_'+vectorfile, sep = '\t', index = False)
 timeaf = time.time()
