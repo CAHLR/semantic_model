@@ -4,6 +4,7 @@ import time
 import pandas as pd
 import numpy as np
 import nltk
+import re
 from sklearn.feature_extraction.text import CountVectorizer
 import string
 
@@ -16,25 +17,24 @@ vocabsize = 0
 num_top_words = 10 # hardcode for now
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:], 'h:v:r:b:o:')
+    opts, args = getopt.getopt(sys.argv[1:], 'h:v:r:b:')
 except getopt.GetoptError:
-    print('\nxxx.py -v <vectorfile> -r <rawfile> -b <blobcolumn> -o <outputfile>')
+    print('\nxxx.py -v <vectorfile> -r <rawfile> -b <blobcolumn>')
     sys.exit(2)
 
 for opt, arg in opts:
     if opt == '-h':
-        print('\nxxx.py -v <vectorfile> -r <rawfile> -b <blobcolumn> -o <outputfile>')
+        print('\nxxx.py -v <vectorfile> -r <rawfile> -b <blobcolumn>')
         print('<vectorfile> is the high dimensional vector\n<rawfile> is the original input data')
-        print('<blobcolumn> is a column in raw file that needs nltk processing\n<outputfile> is the name of your output file')
+        print('<blobcolumn> is a column in raw file that needs nltk processing')
         sys.exit()
     if opt in ("-v"):
         vectorfile = arg
     if opt in ("-r"):
         rawfile = arg
+        outputfile = re.split("\.[a-z]{1,4}", rawfile)[0]+'_semantic'
     if opt in ("-b"):
         blobcolumn = str(arg)
-    if opt in ("-o"):
-        outputfile = arg
 if vectorfile == '':
     print('option [-v] must be set\n')
     sys.exit()
@@ -153,6 +153,7 @@ if (blobcolumn != ''):
     vectors_frame = vec_frame.iloc[:,1:]
     result_frame = vectors_frame.dot(weights_frame.values)
     result_frame += biases
+    print('Sorting classification results...')
     sorted_frame = np.argsort(result_frame,axis=1).iloc[:,-num_top_words:]
 
     for i in range(num_top_words):
@@ -162,6 +163,7 @@ if (blobcolumn != ''):
     vec_frame['bow'] = list(M)
 
 raw_frame.to_csv(outputfile+'.tsv', sep = '\t', index = False)
-vec_frame.to_csv(outputfile+'_bow_'+vectorfile, sep = '\t', index = False)
+vec_frame.to_csv(re.split("\.[a-z]{1,4}", vectorfile)[0]+'_with_bow.tsv', sep = '\t', index = False)
+vectors_frame.to_csv(outputfile+'_vectors.tsv', sep = '\t', index = False)
 timeaf = time.time()
 print('TIME: ',timeaf-timebf)
