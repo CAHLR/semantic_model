@@ -143,8 +143,7 @@ if (blobcolumn != ''):
     vocabsize = len(vocab)
     X = to_bag_of_words(raw_frame, blobcolumn, vocab)
     M = X.toarray()
-    for index, row in raw_frame.iterrows():
-        raw_frame.at[index, blobcolumn] = M[index]
+    raw_frame['bow'] =  list(M)
     try:
         weights_frame = read_big_csv(outputfile+'_weights.tsv')
         biases = read_big_csv(outputfile+'_biases.tsv').iloc[:,0]
