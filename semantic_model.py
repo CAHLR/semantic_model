@@ -3,6 +3,7 @@ import getopt
 import time
 import pandas as pd
 import numpy as np
+np.set_printoptions(threshold=np.nan)
 import nltk
 import re
 from sklearn.feature_extraction.text import CountVectorizer
@@ -143,7 +144,6 @@ if (blobcolumn != ''):
     vocabsize = len(vocab)
     X = to_bag_of_words(raw_frame, blobcolumn, vocab)
     M = X.toarray()
-    raw_frame['bow'] =  list(M)
     try:
         weights_frame = read_big_csv(outputfile+'_weights.tsv')
         biases = read_big_csv(outputfile+'_biases.tsv').iloc[:,0]
@@ -160,7 +160,9 @@ if (blobcolumn != ''):
         raw_frame['predicted_word_' + str(num_top_words-i)] = new_col.values
 
     vec_frame['bow'] = list(M)
+    raw_frame['bow'] =  list(M)
 
+print('Writing results to file...')
 raw_frame.to_csv(outputfile+'.tsv', sep = '\t', index = False)
 vec_frame.to_csv(re.split("\.[a-z]{1,4}", vectorfile)[0]+'_with_bow.tsv', sep = '\t', index = False)
 vectors_frame.to_csv(outputfile+'_vectors.tsv', sep = '\t', index = False)
