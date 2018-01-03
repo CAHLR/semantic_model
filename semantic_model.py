@@ -84,10 +84,10 @@ def get_vocab(dataframe, column):
     from nltk.tokenize import word_tokenize
 
     dataframe[column] = dataframe[column].fillna('')
+    print('Taking at most 2500 unigrams')
     vectorizer = CountVectorizer(stop_words='english', ngram_range=(1,1), max_features=2500)
     X = vectorizer.fit_transform(dataframe[column])
     unigrams = vectorizer.get_feature_names()
-    print('Taking the minimum of 2500 and ' + len(unigrams) + ' unigrams')
     vectorizer = CountVectorizer(stop_words='english', ngram_range=(2,2), max_features=int(len(unigrams)/10))
     X = vectorizer.fit_transform(dataframe[column])
     bigrams = vectorizer.get_feature_names()
@@ -96,7 +96,7 @@ def get_vocab(dataframe, column):
     trigrams = vectorizer.get_feature_names()
 
     vocab = np.concatenate((unigrams, bigrams, trigrams))
-    pd.DataFrame(vocab).to_csv(outputfile+'_vocab.tsv', sep = '\t', index = False)
+    pd.DataFrame(vocab).to_csv(outputfile+'_vocab.tsv', sep = '\t', encoding='utf-8', index = False)
     return vocab
 
 def to_bag_of_words(dataframe, column, vocab):
