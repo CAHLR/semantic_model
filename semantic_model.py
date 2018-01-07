@@ -21,12 +21,12 @@ num_top_words = 10 # hardcode for now
 try:
     opts, args = getopt.getopt(sys.argv[1:], 'h:v:r:b:')
 except getopt.GetoptError:
-    print('\nxxx.py -v <vectorfile> -r <rawfile> -b <blobcolumn>')
+    print('\npython3 semantic_model.py -v <vectorfile> -r <rawfile> -b <blobcolumn>')
     sys.exit(2)
 
 for opt, arg in opts:
     if opt == '-h':
-        print('\nxxx.py -v <vectorfile> -r <rawfile> -b <blobcolumn>')
+        print('\npython3 semantic_model.py -v <vectorfile> -r <rawfile> -b <blobcolumn>')
         print('<vectorfile> is the high dimensional vector\n<rawfile> is the original input data')
         print('<blobcolumn> is a column in raw file that needs nltk processing')
         sys.exit()
@@ -88,10 +88,10 @@ def get_vocab(dataframe, column):
     vectorizer = CountVectorizer(stop_words='english', ngram_range=(1,1), max_features=2500)
     X = vectorizer.fit_transform(dataframe[column])
     unigrams = vectorizer.get_feature_names()
-    vectorizer = CountVectorizer(stop_words='english', ngram_range=(2,2), max_features=int(len(unigrams)/10))
+    vectorizer = CountVectorizer(stop_words='english', ngram_range=(2,2), max_features=max(1, int(len(unigrams)/10)))
     X = vectorizer.fit_transform(dataframe[column])
     bigrams = vectorizer.get_feature_names()
-    vectorizer = CountVectorizer(stop_words='english', ngram_range=(3,3), max_features=int(len(unigrams)/100))
+    vectorizer = CountVectorizer(stop_words='english', ngram_range=(3,3), max_features=max(1, int(len(unigrams)/100)))
     X = vectorizer.fit_transform(dataframe[column])
     trigrams = vectorizer.get_feature_names()
 
