@@ -158,7 +158,7 @@ len_raw_frame = len(raw_frame.index)
 
 if (len_vec_frame != len_raw_frame):
     print('vector file and raw file entries do not line up\n')
-    print(len(len_vec_frame), len(len_raw_frame))
+    print(len_vec_frame, len_raw_frame)
     sys.exit()
 
 if (blobcolumn != ''):
