@@ -8,7 +8,6 @@ np.set_printoptions(threshold=np.nan)
 import nltk
 import re
 import string
-from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import SpectralClustering
 from sklearn.metrics import silhouette_score
@@ -19,27 +18,23 @@ blobcolumn = ''
 outputfile = ''
 vocabsize = 0
 num_top_words = 10 # hardcode for now
-text_extraction = "CountVectorizer"
 use_idf = False
-num_epochs = 5
-samples_per_batch = 32
 num_clusters = 5
+num_epochs = 5
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:], 'h:v:r:b:k:e:s:t:i:')
+    opts, args = getopt.getopt(sys.argv[1:], 'h:v:r:b:k:e:i:')
 except getopt.GetoptError:
-    print('\npython3 semantic_model.py -v <vectorfile> -r <rawfile> -b <blobcolumn> [-k <num_clusters> -e <num_epochs> -s <samples_per_batch> -t <text_extraction> -i <use_idf>]')
+    print('\npython3 semantic_model.py -v <vectorfile> -r <rawfile> -b <blobcolumn> [-k <num_clusters> -e <num_epochs> -i <use_idf>]')
     sys.exit(2)
 
 for opt, arg in opts:
     if opt == '-h':
-        print('\npython3 semantic_model.py -v <vectorfile> -r <rawfile> -b <blobcolumn> [-k <num_clusters> -e <num_epochs> -t <text_extraction> -i <use_idf>]')
+        print('\npython3 semantic_model.py -v <vectorfile> -r <rawfile> -b <blobcolumn> [-k <num_clusters> -e <num_epochs> -i <use_idf>]')
         print('<vectorfile> is the high dimensional vector\n<rawfile> is the original input data')
         print('<blobcolumn> is a column in raw file that needs nltk processing')
-        print('<num_clusters> is the number of clusters to bin the data into')
+        print('<num_clusters> is the number of clusters to bin the data into (default 5)')
         print('<num_epochs> is the number of epochs to train the logistic regression model for (default 5)')
-        print('<samples_per_batch> is the number of samples per gradient update when training logistic regression model (default 32)')
-        print('<text_extraction> is either CountVectorizer (default) or TfidfVectorizer')
         print('<use_idf> is either True or False (default) for using idf')
         sys.exit()
     if opt in ("-v"):
@@ -52,10 +47,6 @@ for opt, arg in opts:
         num_clusters = int(arg)
     if opt in ("-e"):
         num_epochs = int(arg)
-    if opt in ("-s"):
-        samples_per_batch = int(arg)
-    if opt in ("-t"):
-        text_extraction = str(arg)
     if opt in ("-i"):
         use_idf = arg
 if vectorfile == '':
@@ -68,7 +59,7 @@ if rawfile == '':
 print('Vector input: ' + vectorfile)
 print('Raw input: ' + rawfile)
 print('Blob column: ' + blobcolumn)
-outputfile = re.split("\.[a-z]{1,4}", rawfile)[0]+'_semantic__'+str(num_epochs)+'epochs'+str(samples_per_batch)+'batchsize'+str(num_clusters)+'clusters'+text_extraction+str(use_idf)
+outputfile = re.split("\.[a-z]{1,4}", rawfile)[0]+'_semantic__'+str(num_epochs)+'epochs'+str(num_clusters)+'clusters'+str(use_idf)
 print('Output file: ' + outputfile)
 
 # Start
@@ -103,25 +94,17 @@ def get_vocab(dataframe, column):
     from nltk.tokenize import word_tokenize
 
     dataframe[column] = dataframe[column].fillna('')
+
     print('Taking at most 2500 unigrams')
-    if (text_extraction == 'CountVectorizer'):
-        print('Using CountVectorizer')
-        vectorizer = CountVectorizer(stop_words='english', ngram_range=(1,1), max_features=2500)
-    else:
-        print('Using TfidfVectorizer')
-        vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1,1), max_features=2500, use_idf=use_idf)
+    vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1,1), max_features=2500, use_idf=use_idf)
     X = vectorizer.fit_transform(dataframe[column])
     unigrams = vectorizer.get_feature_names()
-    if (text_extraction == 'CountVectorizer'):
-        vectorizer = CountVectorizer(stop_words='english', ngram_range=(2,2), max_features=max(1, int(len(unigrams)/10)))
-    else:
-        vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(2,2), max_features=max(1, int(len(unigrams)/10)), use_idf=use_idf)
+
+    vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(2,2), max_features=max(1, int(len(unigrams)/10)), use_idf=use_idf)
     X = vectorizer.fit_transform(dataframe[column])
     bigrams = vectorizer.get_feature_names()
-    if (text_extraction == 'CountVectorizer'):
-        vectorizer = CountVectorizer(stop_words='english', ngram_range=(3,3), max_features=max(1, int(len(unigrams)/10)))
-    else:
-        vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(3,3), max_features=max(1, int(len(unigrams)/10)), use_idf=use_idf)
+
+    vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(3,3), max_features=max(1, int(len(unigrams)/10)), use_idf=use_idf)
     X = vectorizer.fit_transform(dataframe[column])
     trigrams = vectorizer.get_feature_names()
 
@@ -130,10 +113,7 @@ def get_vocab(dataframe, column):
     return vocab
 
 def to_bag_of_words(dataframe, column, vocab):
-    if (text_extraction == 'CountVectorizer'):
-        vectorizer = CountVectorizer(stop_words='english', vocabulary=vocab)
-    else:
-        vectorizer = TfidfVectorizer(stop_words='english', vocabulary=vocab, use_idf=False)
+    vectorizer = TfidfVectorizer(stop_words='english', vocabulary=vocab, use_idf=False)
     X = vectorizer.fit_transform(dataframe[column].values.astype('U'))
     return X
 
@@ -178,6 +158,7 @@ len_raw_frame = len(raw_frame.index)
 
 if (len_vec_frame != len_raw_frame):
     print('vector file and raw file entries do not line up\n')
+    print(len(len_vec_frame), len(len_raw_frame))
     sys.exit()
 
 if (blobcolumn != ''):
