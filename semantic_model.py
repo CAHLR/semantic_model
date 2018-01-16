@@ -59,14 +59,14 @@ if rawfile == '':
 print('Vector input: ' + vectorfile)
 print('Raw input: ' + rawfile)
 print('Blob column: ' + blobcolumn)
-outputfile = re.split("\.[a-z]{1,4}", rawfile)[0]+'_semantic__'+str(num_epochs)+'epochs'+str(num_clusters)+'clusters'+str(use_idf)
+outputfile = re.split("\.t[a-z]{2}$", rawfile)[0]+'_semantic__'+str(num_epochs)+'epochs'+str(num_clusters)+'clusters'+str(use_idf)
 print('Output file: ' + outputfile)
 
 # Start
 
 def read_big_csv(inputfile):
     print("Reading "+inputfile+"...")
-    with open(inputfile,'r') as f:
+    with open(inputfile,'r', encoding='utf-8') as f:
         a = f.readline()
     csvlist = a.split(',')
     tsvlist = a.split('\t')
@@ -202,11 +202,11 @@ raw_frame.to_csv(outputfile+'.tsv', sep = '\t', index = False)
 bow_frame.to_csv(outputfile+'_bow.tsv', sep = '\t', index = False)
 
 print('Copying tsv files to txt for gzip')
-os.system('mv '+ outputfile+'_weights.tsv' + ' ' + outputfile+'_weights.txt')
-os.system('mv '+ outputfile+'_biases.tsv' + ' ' + outputfile+'_biases.txt')
-os.system('mv '+ outputfile + '_vocab.tsv' + ' ' + outputfile + '_vocab.txt')
-os.system('mv '+ outputfile+'.tsv' + ' ' + outputfile+'.txt')
-os.system('mv '+ outputfile+'_bow.tsv' + ' ' + outputfile+'_bow.txt')
-os.system('mv '+ vectorfile + ' ' + re.split("\.t.{0,3}", vectorfile)[0]+'.txt')
+os.system('cp '+ outputfile+'_weights.tsv' + ' ' + outputfile+'_weights.txt')
+os.system('cp '+ outputfile+'_biases.tsv' + ' ' + outputfile+'_biases.txt')
+os.system('cp '+ outputfile + '_vocab.tsv' + ' ' + outputfile + '_vocab.txt')
+os.system('cp '+ outputfile+'.tsv' + ' ' + outputfile+'.txt')
+os.system('cp '+ outputfile+'_bow.tsv' + ' ' + outputfile+'_bow.txt')
+os.system('cp '+ vectorfile + ' ' + re.split("\.t.{0,3}", vectorfile)[0]+'.txt')
 timeaf = time.time()
 print('TIME: ', timeaf-timebf)
