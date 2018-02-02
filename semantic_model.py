@@ -53,7 +53,7 @@ vocabsize = 0
 num_top_words = 10 # hardcode for now
 use_idf = False
 num_clusters = 5
-tf_bias = 1
+tf_bias = -999
 num_epochs = 5
 write_directory = './'
 scorefile = './scorefile.txt'
@@ -72,7 +72,7 @@ for opt, arg in opts:
         print('write_directory is where you would like to save the output files')
         print('scorefile_location is where you would like the scores to be saved')
         print('<num_clusters> is the number of clusters to bin the data into (default 5)')
-        print('<tf_bias> is the bias constant for term-frequency (not used yet)')
+        print('<tf_bias> is the bias constant for term-frequency')
         print('<num_epochs> is the number of epochs to train the logistic regression model for (default 5)')
         print('<use_idf> is either True or False (default) for using idf')
         print('<cluster_input> is either softmax, bow, or both (default)')
@@ -111,6 +111,9 @@ print('[INFO] Vector input: ' + vectorfile)
 print('[INFO] Raw input: ' + rawfile)
 print('[INFO] Text column: ' + textcolumn)
 outputfile = re.split("\.t[a-z]{2}$", rawfile)[0]+'_semantic__'+str(num_epochs)+'epochs'+str(num_clusters)+'clusters'+str(use_idf)
+if tf_bias != -999:
+    print('[INFO] Term-frequency bias: ' + str(tf_bias))
+    outputfile = outputfile + str(tf_bias)
 outputfilename = outputfile.split('/')[-1]
 print('[INFO] Output file: ' + outputfile)
 print('[INFO] Output directory: ' + write_directory)
@@ -173,10 +176,11 @@ def get_vocab(dataframe, column):
 def to_bag_of_words(dataframe, column, vocab):
     vectorizer = TfidfVectorizer(stop_words='english', vocabulary=vocab, use_idf=False)
     X = vectorizer.fit_transform(dataframe[column].values.astype('U'))
+    if tf_bias == -999:
+        return X
     print(X)
     print((X.multiply(1/X.count_nonzero())).power(-tf_bias))
     return (X.multiply(1/X.count_nonzero())).power(-tf_bias)
-    # return X
 
 @timeout(7200, "Timeout at logistic_regression.")
 # @timeout_decorator.timeout(7200, exception_message='timeout occured at logistic_regression')
