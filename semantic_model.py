@@ -46,6 +46,8 @@ vectorfile = ''
 rawfile = ''
 textcolumn = ''
 outputfile = ''
+cluster_input = 'both'
+cluster_eval = 'both'
 
 vocabsize = 0
 num_top_words = 10 # hardcode for now
@@ -57,14 +59,14 @@ write_directory = './'
 scorefile = './scorefile.txt'
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:], 'h:v:r:t:d:s:k:b:e:i:')
+    opts, args = getopt.getopt(sys.argv[1:], 'h:v:r:t:d:s:k:b:e:i:n:l:')
 except getopt.GetoptError:
-    print('\npython3 semantic_model.py -v <vectorfile> -r <rawfile> -t <textcolumn> [-d <write_directory> (if not current directory) -s <scorefile_location> (if not ./scorefile.txt) -k <num_clusters> -b <tf_bias> -e <num_epochs> -i <use_idf>]')
+    print('\npython3 semantic_model.py -v <vectorfile> -r <rawfile> -t <textcolumn> [-d <write_directory> (if not current directory) -s <scorefile_location> (if not ./scorefile.txt) -k <num_clusters> -b <tf_bias> -e <num_epochs> -i <use_idf> -n <cluster_input> -l <cluster_eval>]')
     sys.exit(2)
 
 for opt, arg in opts:
     if opt == '-h':
-        print('\npython3 semantic_model.py -v <vectorfile> -r <rawfile> -t <textcolumn> [-d <write_directory> (if not current directory) -s <scorefile_location> (if not ./scorefile.txt) -k <num_clusters> -b <tf_bias> -e <num_epochs> -i <use_idf>]')
+        print('\npython3 semantic_model.py -v <vectorfile> -r <rawfile> -t <textcolumn> [-d <write_directory> (if not current directory) -s <scorefile_location> (if not ./scorefile.txt) -k <num_clusters> -b <tf_bias> -e <num_epochs> -i <use_idf> -n <cluster_input> -l <cluster_eval>]')
         print('<vectorfile> is the high dimensional vector\n<rawfile> is the original input data')
         print('<textcolumn> is a column in raw file that needs nltk processing')
         print('write_directory is where you would like to save the output files')
@@ -73,6 +75,8 @@ for opt, arg in opts:
         print('<tf_bias> is the bias constant for term-frequency (not used yet)')
         print('<num_epochs> is the number of epochs to train the logistic regression model for (default 5)')
         print('<use_idf> is either True or False (default) for using idf')
+        print('<cluster_input> is either softmax, bow, or both (default)')
+        print('<cluster_eval> is either vector, 2d, or both (default)')
         sys.exit()
     if opt in ("-v"):
         vectorfile = arg
@@ -92,6 +96,10 @@ for opt, arg in opts:
         num_epochs = int(arg)
     if opt in ("-i"):
         use_idf = arg
+    if opt in ("-n"):
+        cluster_input = arg
+    if opt in ("-l"):
+        cluster_eval = arg
 if vectorfile == '':
     print('[DEBUG] option [-v] must be set\n')
     sys.exit()
@@ -103,6 +111,7 @@ print('[INFO] Vector input: ' + vectorfile)
 print('[INFO] Raw input: ' + rawfile)
 print('[INFO] Text column: ' + textcolumn)
 outputfile = re.split("\.t[a-z]{2}$", rawfile)[0]+'_semantic__'+str(num_epochs)+'epochs'+str(num_clusters)+'clusters'+str(use_idf)
+outputfilename = outputfile.split('/')[-1]
 print('[INFO] Output file: ' + outputfile)
 print('[INFO] Output directory: ' + write_directory)
 
@@ -199,7 +208,7 @@ def cluster(X):
     # Add small number to denom to prevent nan.
     # ?? Can this be improved
     # X = np.exp(-X / (X.std() + 1e-6))
-    X = np.exp(- X**2 / (2. * 1**2))
+    X = np.exp(- X**2 / (2. * 1 ** 2))
     clusters = None
     attempts = 0
     while clusters is None and attempts < 15:
@@ -272,24 +281,35 @@ if (textcolumn != ''):
     # Assess cluster assignments using vector cosine proximity
     time_cluster_score_bf = time.time()
     sf = open(scorefile,'a+')
-    silhouette_avg = silhouette_score(vec_frame.iloc[:,1:], softmax_clusters, metric='cosine')
-    print('Score--' + outputfile + '\tsoftmax\tvector\t' + str(silhouette_avg))
-    sf.write('\n' + outputfile + '\tsoftmax\tvector\t' + str(silhouette_avg))
-    # Assess cluster assignments using 2d vector cosine proximity
-    silhouette_avg = silhouette_score(raw_frame.iloc[:,1:3], softmax_clusters, metric='cosine')
-    print('Score--' + outputfile + '\tsoftmax\t2d\t' + str(silhouette_avg))
-    sf.write('\n' + outputfile + '\tsoftmax\t2d\t' + str(silhouette_avg))
+    # if (cluster_input == 'softmax' or cluster_input == 'both'):
+    if (cluster_input != 'bow'):
+        # if (cluster_eval == 'vector' or 'both'):
+        if (cluster_eval != '2d'):
+            silhouette_avg = silhouette_score(vec_frame.iloc[:,1:], softmax_clusters, metric='cosine')
+            print('Score--' + outputfilename + '\tsoftmax\tvector\t' + str(silhouette_avg))
+            sf.write('\n' + outputfilename + '\tsoftmax\tvector\t' + str(silhouette_avg))
+        # Assess cluster assignments using 2d vector cosine proximity
+        # if (cluster_eval == '2d' or 'both'):
+        if (cluster_eval != 'vector'):
+            silhouette_avg = silhouette_score(raw_frame.iloc[:,1:3], softmax_clusters, metric='cosine')
+            print('Score--' + outputfilename + '\tsoftmax\t2d\t' + str(silhouette_avg))
+            sf.write('\n' + outputfilename + '\tsoftmax\t2d\t' + str(silhouette_avg))
 
     ### Repeat with actual bag of words ###
-    bow_clusters = cluster(bow_frame)
-    raw_frame['bow_cluster'] = bow_clusters
-
-    silhouette_avg = silhouette_score(vec_frame.iloc[:,1:], bow_clusters, metric='cosine')
-    print('Score--' + outputfile + '\tbow\tvector\t' + str(silhouette_avg))
-    sf.write('\n' + outputfile + '\tbow\tvector\t' + str(silhouette_avg))
-    silhouette_avg = silhouette_score(raw_frame.iloc[:,1:3], bow_clusters, metric='cosine')
-    print('Score--' + outputfile + '\tbow\t2d\t' + str(silhouette_avg))
-    sf.write('\n' + outputfile + '\tbow\t2d\t' + str(silhouette_avg))
+    # if (cluster_input == 'bow' or cluster_input == 'both'):
+    if (cluster_input != 'softmax'):
+        bow_clusters = cluster(bow_frame)
+        raw_frame['bow_cluster'] = bow_clusters
+        # if (cluster_eval == 'vector' or 'both'):
+        if (cluster_eval != '2d'):
+            silhouette_avg = silhouette_score(vec_frame.iloc[:,1:], bow_clusters, metric='cosine')
+            print('Score--' + outputfilename + '\tbow\tvector\t' + str(silhouette_avg))
+            sf.write('\n' + outputfilename + '\tbow\tvector\t' + str(silhouette_avg))
+        # if (cluster_eval == '2d' or 'both'):
+        if (cluster_eval != 'vector'):
+            silhouette_avg = silhouette_score(raw_frame.iloc[:,1:3], bow_clusters, metric='cosine')
+            print('Score--' + outputfilename + '\tbow\t2d\t' + str(silhouette_avg))
+            sf.write('\n' + outputfilename + '\tbow\t2d\t' + str(silhouette_avg))
     sf.close()
     time_cluster_score_af = time.time()
     print('[INFO] calculating clustering scores took ' + str(time_cluster_score_af - time_cluster_score_bf))
