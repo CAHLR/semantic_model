@@ -97,9 +97,9 @@ for opt, arg in opts:
     if opt in ("-i"):
         use_idf = arg
     if opt in ("-n"):
-        cluster_input = arg
+        cluster_input = arg.lower()
     if opt in ("-l"):
-        cluster_eval = arg
+        cluster_eval = arg.lower()
 if vectorfile == '':
     print('[DEBUG] option [-v] must be set\n')
     sys.exit()
