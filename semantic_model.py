@@ -1,8 +1,10 @@
 import subprocess
+import os
 import sys
 import getopt
 import time
-# import timeout_decorator
+# Timeout decorator package from: https://pypi.python.org/pypi/timeout-decorator
+import timeout_decorator
 import pandas as pd
 import numpy as np
 np.set_printoptions(threshold=np.nan)
@@ -13,41 +15,12 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.cluster import SpectralClustering
 from sklearn.metrics import silhouette_score
 
-from functools import wraps
-import errno
-import os
-import signal
-
-# Can use timeout decorator package: https://pypi.python.org/pypi/timeout-decorator
-# Timeout decorator setup. See link for description.
-
-# https://stackoverflow.com/questions/31822190/how-does-the-timeouttimelimit-decorator-work?noredirect=1&lq=1
-class TimeoutError(Exception):
-    pass
-
-def timeout(seconds=100, error_message=os.strerror(errno.ETIME)):
-    def decorator(func):
-        def _handle_timeout(signum, frame):
-            raise TimeoutError(error_message)
-        @wraps(func)
-        def wrapper(*args, **kwargs):
-            signal.signal(signal.SIGALRM, _handle_timeout)
-            signal.alarm(seconds)
-            try:
-                result = func(*args, **kwargs)
-            finally:
-                signal.alarm(0)
-            return result
-        return wrapper
-    return decorator
-
-
 vectorfile = ''
 rawfile = ''
 textcolumn = ''
 outputfile = ''
-cluster_input = 'both'
-cluster_eval = 'both'
+cluster_input = []
+cluster_eval = []
 
 vocabsize = 0
 num_top_words = 10 # hardcode for now
@@ -59,7 +32,7 @@ write_directory = './'
 scorefile = './scorefile.txt'
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:], 'h:v:r:t:d:s:k:b:e:i:n:l:')
+    opts, args = getopt.getopt(sys.argv[1:], 'hv:r:t:d:s:k:b:e:i:n:l:')
 except getopt.GetoptError:
     print('\npython3 semantic_model.py -v <vectorfile> -r <rawfile> -t <textcolumn> [-d <write_directory> (if not current directory) -s <scorefile_location> (if not ./scorefile.txt) -k <num_clusters> -b <tf_bias> -e <num_epochs> -i <use_idf> -n <cluster_input> -l <cluster_eval>]')
     sys.exit(2)
@@ -75,31 +48,50 @@ for opt, arg in opts:
         print('<tf_bias> is the bias constant for term-frequency')
         print('<num_epochs> is the number of epochs to train the logistic regression model for (default 5)')
         print('<use_idf> is either True or False (default) for using idf')
-        print('<cluster_input> is either softmax, bow, or both (default)')
-        print('<cluster_eval> is either vector, 2d, or both (default)')
+        print('<cluster_input> is a '+'-separated (no spaces) list like softmax+bow (default)')
+        print('<cluster_eval> is a '+'-separated (no spaces) list like vector+2d (default)')
         sys.exit()
     if opt in ("-v"):
+        print('[INFO] setting -v')
         vectorfile = arg
     if opt in ("-r"):
+        print('[INFO] setting -r')
         rawfile = arg
     if opt in ("-t"):
+        print('[INFO] setting -t')
         textcolumn = arg
     if opt in ("-d"):
+        print('[INFO] setting -d')
         write_directory = arg
     if opt in ("-s"):
+        print('[INFO] setting -s')
         scorefile = arg
     if opt in ("-k"):
+        print('[INFO] setting -k')
         num_clusters = int(arg)
     if opt in ("-b"):
+        print('[INFO] setting -b')
         tf_bias = float(arg)
     if opt in ("-e"):
+        print('[INFO] setting -e')
         num_epochs = int(arg)
     if opt in ("-i"):
+        print('[INFO] setting -i')
         use_idf = arg
     if opt in ("-n"):
+        print('[INFO] setting -n')
+        print(arg)
+        print(len(arg.split("+")))
         cluster_input = arg.lower()
+        cluster_input = cluster_input.split("+")
+        print('[DEBUG] cluster inputs: ')
+        print(cluster_input)
     if opt in ("-l"):
+        print('[INFO] setting -l')
         cluster_eval = arg.lower()
+        cluster_eval = cluster_eval.split("+")
+        print('[DEBUG] cluster evals: ')
+        print(cluster_eval)
 if vectorfile == '':
     print('[DEBUG] option [-v] must be set\n')
     sys.exit()
@@ -114,13 +106,14 @@ outputfile = re.split("\.t[a-z]{2}$", rawfile)[0]+'_semantic__'+str(num_epochs)+
 if tf_bias != -999:
     print('[INFO] Term-frequency bias: ' + str(tf_bias))
     outputfile = outputfile + str(tf_bias)
+print('[INFO] Clustering by: ' + ', '.join(cluster_input))
+print('[INFO] Evaluating clusters by: ' + ', '.join(cluster_eval))
 outputfilename = outputfile.split('/')[-1]
 print('[INFO] Output file: ' + outputfile)
 print('[INFO] Output directory: ' + write_directory)
 
 # Start
-@timeout(600, "Timeout at read_big_csv.")
-# @timeout_decorator.timeout(600, exception_message='timeout occured at read_big_csv')
+@timeout_decorator.timeout(600, exception_message='timeout occured at read_big_csv')
 def read_big_csv(inputfile):
     print('[INFO] Reading '+inputfile+'...')
     with open(inputfile,'r', encoding='utf-8') as f:
@@ -145,8 +138,7 @@ def read_big_csv(inputfile):
     df = pd.concat(chunks, ignore_index=True)
     return df
 
-@timeout(1200, "Timeout at get_vocab.")
-# @timeout_decorator.timeout(1200, exception_message='timeout occured at get_vocab')
+@timeout_decorator.timeout(600, exception_message='timeout occured at get_vocab')
 def get_vocab(dataframe, column):
     print("[INFO] Getting vocab...")
     from nltk.corpus import stopwords
@@ -154,8 +146,8 @@ def get_vocab(dataframe, column):
 
     dataframe[column] = dataframe[column].fillna('')
 
-    print('[INFO] Taking at most 2500 (most frequent) unigrams')
-    vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1,1), max_features=2500, use_idf=use_idf)
+    print('[INFO] Taking at most 2000 (most frequent) unigrams')
+    vectorizer = TfidfVectorizer(stop_words='english', ngram_range=(1,1), max_features=2000, use_idf=use_idf)
     X = vectorizer.fit_transform(dataframe[column])
     unigrams = vectorizer.get_feature_names()
 
@@ -171,19 +163,17 @@ def get_vocab(dataframe, column):
     pd.DataFrame(vocab).to_csv(outputfile+'_vocab.tsv', sep = '\t', encoding='utf-8', index = False)
     return vocab
 
-@timeout(2400, "Timeout at to_bag_of_words.")
-# @timeout_decorator.timeout(2400, exception_message='timeout occured at to_bag_of_words')
+@timeout_decorator.timeout(600, exception_message='timeout occured at to_bag_of_words')
 def to_bag_of_words(dataframe, column, vocab):
     vectorizer = TfidfVectorizer(stop_words='english', vocabulary=vocab, use_idf=False)
     X = vectorizer.fit_transform(dataframe[column].values.astype('U'))
     if tf_bias == -999:
         return X
-    print(X)
-    print((X.multiply(1/X.count_nonzero())).power(-tf_bias))
+    # print(X)
+    # print((X.multiply(1/X.count_nonzero())).power(-tf_bias))
     return (X.multiply(1/X.count_nonzero())).power(-tf_bias)
 
-@timeout(7200, "Timeout at logistic_regression.")
-# @timeout_decorator.timeout(7200, exception_message='timeout occured at logistic_regression')
+@timeout_decorator.timeout(3600, exception_message='timeout occured at logistic_regression')
 def logistic_regression(X, Y):
     print('[INFO] Performing logistic regression...')
     from keras.layers import Input, Dense
@@ -203,8 +193,7 @@ def logistic_regression(X, Y):
     biases_frame.to_csv(outputfile+'_biases.tsv', sep = '\t', index = False)
     return(weights_frame, biases)
 
-@timeout(4800, "Timeout at cluster.")
-# @timeout_decorator.timeout(4800, exception_message='timeout occured at cluster')
+@timeout_decorator.timeout(3600, exception_message='timeout occured at cluster')
 def cluster(X):
     print('[INFO] Clustering vectors...')
     # Take a decreasing function of the gradient: we take it weakly
@@ -241,7 +230,7 @@ if (len_vec_frame != len_raw_frame):
     print('[DEBUG] vector file and raw file entries do not line up: ' + str(len_vec_frame) + ' ' + str(len_raw_frame))
     sys.exit()
 time_get_data_af = time.time()
-print('[INFO] getting data took ' + str(time_get_data_af - time_get_data_bf))
+print('[INFO] Getting data took ' + str(time_get_data_af - time_get_data_bf))
 
 if (textcolumn != ''):
     ### Using the textcolumn, obtain a bow encoding and train the vectorspace coeffs to predict the bow of a point. ###
@@ -254,7 +243,7 @@ if (textcolumn != ''):
     M = X.toarray()
     bow_frame = pd.DataFrame(M)
     time_get_vocab_and_bow_af = time.time()
-    print('[INFO] getting vocab and bow took ' + str(time_get_vocab_and_bow_af - time_get_vocab_and_bow_bf))
+    print('[INFO] Getting vocab and bow took ' + str(time_get_vocab_and_bow_af - time_get_vocab_and_bow_bf))
 
     # Train the coefficients for the vectorspace factors to predict the bag of words
     time_train_model_bf = time.time()
@@ -262,7 +251,7 @@ if (textcolumn != ''):
     # Obtain the softmax predictions
     softmax_frame = vec_frame.iloc[:,1:].dot(weights_frame.values) + biases
     time_train_model_af = time.time()
-    print('[INFO] training model took ' + str(time_get_data_af - time_get_data_bf))
+    print('[INFO] Training model took ' + str(time_get_data_af - time_get_data_bf))
 
     # From the softmax predictions, save the top 10 predicted words for each data point
     time_get_top_predictions_bf = time.time()
@@ -272,58 +261,59 @@ if (textcolumn != ''):
         new_col = vocab_frame.iloc[sorted_frame.iloc[:,i],0] # get the ith top vocab word for each entry
         raw_frame['predicted_word_' + str(num_top_words-i)] = new_col.values
     time_get_top_predictions_af = time.time()
-    print('[INFO] getting top predictions for each point took ' + str(time_get_top_predictions_af - time_get_top_predictions_bf))
+    print('[INFO] Getting top predictions for each point took ' + str(time_get_top_predictions_af - time_get_top_predictions_bf))
 
-    ### Assign each point to a cluster based on the bag of word predictions ###
-    time_assign_clusters_bf = time.time()
-    softmax_clusters = cluster(softmax_frame)
-    # Save cluster assignments to dataframe
-    raw_frame['softmax_cluster'] = softmax_clusters
-    time_assign_clusters_af = time.time()
-    print('[INFO] assigning clusters took ' + str(time_assign_clusters_af - time_assign_clusters_bf))
-
-    # Assess cluster assignments using vector cosine proximity
-    time_cluster_score_bf = time.time()
+    ### Cluster points based on various metrics and evaluating each clustering ###
     sf = open(scorefile,'a+')
-    # if (cluster_input == 'softmax' or cluster_input == 'both'):
-    if (cluster_input != 'bow'):
-        # if (cluster_eval == 'vector' or 'both'):
-        if (cluster_eval != '2d'):
-            silhouette_avg = silhouette_score(vec_frame.iloc[:,1:], softmax_clusters, metric='cosine')
-            print('Score--' + outputfilename + '\tsoftmax\tvector\t' + str(silhouette_avg))
-            sf.write('\n' + outputfilename + '\tsoftmax\tvector\t' + str(silhouette_avg))
-        # Assess cluster assignments using 2d vector cosine proximity
-        # if (cluster_eval == '2d' or 'both'):
-        if (cluster_eval != 'vector'):
-            silhouette_avg = silhouette_score(raw_frame.iloc[:,1:3], softmax_clusters, metric='cosine')
-            print('Score--' + outputfilename + '\tsoftmax\t2d\t' + str(silhouette_avg))
-            sf.write('\n' + outputfilename + '\tsoftmax\t2d\t' + str(silhouette_avg))
-
-    ### Repeat with actual bag of words ###
-    # if (cluster_input == 'bow' or cluster_input == 'both'):
-    if (cluster_input != 'softmax'):
-        bow_clusters = cluster(bow_frame)
-        raw_frame['bow_cluster'] = bow_clusters
-        # if (cluster_eval == 'vector' or 'both'):
-        if (cluster_eval != '2d'):
-            silhouette_avg = silhouette_score(vec_frame.iloc[:,1:], bow_clusters, metric='cosine')
-            print('Score--' + outputfilename + '\tbow\tvector\t' + str(silhouette_avg))
-            sf.write('\n' + outputfilename + '\tbow\tvector\t' + str(silhouette_avg))
-        # if (cluster_eval == '2d' or 'both'):
-        if (cluster_eval != 'vector'):
-            silhouette_avg = silhouette_score(raw_frame.iloc[:,1:3], bow_clusters, metric='cosine')
-            print('Score--' + outputfilename + '\tbow\t2d\t' + str(silhouette_avg))
-            sf.write('\n' + outputfilename + '\tbow\t2d\t' + str(silhouette_avg))
+    time_clusters_bf = time.time()
+    print('[INFO] Clustering using')
+    print(cluster_input)
+    for elem in cluster_input:
+        print(elem)
+        if elem == 'softmax':
+            print('[DEBUG] softmax detected')
+            clusters = cluster(softmax_frame)
+        elif elem == 'bow':
+            print('[DEBUG] bow detected')
+            clusters = cluster(bow_frame)
+        else:
+            print('[DEBUG] ' + elem + ' detected')
+            # clusters = cluster(raw_frame[[elem]])
+            clusters = raw_frame[[elem]]
+        print('[DEBUG] Got clusters: ')
+        print(clusters)
+        # Save cluster assignments to dataframe
+        raw_frame[elem + '_cluster'] = clusters
+        # Evaluate the clustering's cosine proximity
+        print('[INFO] Evaluating clustering using')
+        print(cluster_eval)
+        for el in cluster_eval:
+            print(el)
+            if el == 'vector':
+                print('[DEBUG] vector detected')
+                eval_by = vec_frame.iloc[:,1:]
+            elif el == '2d':
+                print('[DEBUG] bow detected')
+                eval_by = raw_frame[['x', 'y']]
+                print(eval_by)
+                print(type(eval_by))
+            else:
+                print('[DEBUG] ' + elem + ' detected')
+                eval_by = raw_frame[[el]]
+            silhouette_avg = silhouette_score(eval_by, clusters, metric='cosine')
+            print('Score--' + outputfilename + '\t'+elem+'\t'+el+'\t' + str(silhouette_avg))
+            sf.write('\n' + outputfilename + '\t'+elem+'\t'+el+'\t' + str(silhouette_avg))
+    time_clusters_af = time.time()
+    print('[INFO] Assigning and evaluating clusters took ' + str(time_clusters_af - time_clusters_bf))
+    print('[INFO] Scores available through logs or in ' + scorefile)
     sf.close()
-    time_cluster_score_af = time.time()
-    print('[INFO] calculating clustering scores took ' + str(time_cluster_score_af - time_cluster_score_bf))
 
 print('[INFO] Writing results to file...')
 time_writing_files_bf = time.time()
 raw_frame.to_csv(outputfile+'.tsv', sep = '\t', index = False)
 bow_frame.to_csv(outputfile+'_bow.tsv', sep = '\t', index = False)
 time_writing_files_af = time.time()
-print('[INFO] writing new raw_frame and bow_frame to file took ' + str(time_writing_files_af - time_writing_files_bf))
+print('[INFO] Writing new raw_frame and bow_frame to file took ' + str(time_writing_files_af - time_writing_files_bf))
 
 print('[INFO] Moving tsv files to txt for gzip')
 time_txt_files_bf = time.time()
