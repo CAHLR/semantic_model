@@ -165,12 +165,12 @@ def get_vocab(dataframe, column):
 
 @timeout_decorator.timeout(600, exception_message='timeout occured at to_bag_of_words')
 def to_bag_of_words(dataframe, column, vocab):
+    """Input: raw dataframe, text column, and vocabulary.
+    Returns a sparse matrix of the bag of words representation of the column."""
     vectorizer = TfidfVectorizer(stop_words='english', vocabulary=vocab, use_idf=False)
     X = vectorizer.fit_transform(dataframe[column].values.astype('U'))
     if tf_bias == -999:
         return X
-    # print(X)
-    # print((X.multiply(1/X.count_nonzero())).power(-tf_bias))
     return (X.multiply(1/X.count_nonzero())).power(-tf_bias)
 
 @timeout_decorator.timeout(3600, exception_message='timeout occured at logistic_regression')
@@ -199,7 +199,7 @@ def cluster(X):
     # Take a decreasing function of the gradient: we take it weakly
     # dependent from the gradient the segmentation is close to a voronoi.
     # Add small number to denom to prevent nan.
-    # ?? Can this be improved
+    # ?? Can this be improved?
     # X = np.exp(-X / (X.std() + 1e-6))
     X = np.exp(- X**2 / (2. * 1 ** 2))
     clusters = None
@@ -221,34 +221,46 @@ timebf = time.time()
 print('[INFO] Start time: ' + str(timebf))
 # get data
 time_get_data_bf = time.time()
-vec_frame = read_big_csv(vectorfile)
-raw_frame = read_big_csv(rawfile)
+vec_frame = read_big_csv(vectorfile) # VS representation of each user, all numeric
+raw_frame = read_big_csv(rawfile) # User information, various data
 
 len_vec_frame = len(vec_frame.index)
 len_raw_frame = len(raw_frame.index)
 if (len_vec_frame != len_raw_frame):
     print('[DEBUG] vector file and raw file entries do not line up: ' + str(len_vec_frame) + ' ' + str(len_raw_frame))
     sys.exit()
+
+nonempty_indices = np.where(raw_frame[textcolumn].notnull() == True)[0]
+filtered_vec_frame = vec_frame.iloc[nonempty_indices,:]
+filtered_raw_frame = raw_frame.iloc[nonempty_indices,:]
+
 time_get_data_af = time.time()
 print('[INFO] Getting data took ' + str(time_get_data_af - time_get_data_bf))
 
 if (textcolumn != ''):
     ### Using the textcolumn, obtain a bow encoding and train the vectorspace coeffs to predict the bow of a point. ###
+    # Get the vocab
     time_get_vocab_and_bow_bf = time.time()
     vocab = get_vocab(raw_frame, textcolumn)
     vocab_frame = pd.DataFrame(vocab)
     vocabsize = len(vocab)
     # Convert the textcolumn of the raw dataframe into bag of words representation
-    X = to_bag_of_words(raw_frame, textcolumn, vocab)
-    M = X.toarray()
-    bow_frame = pd.DataFrame(M)
+    bow_spmatrix = to_bag_of_words(raw_frame, textcolumn, vocab)
+    bow_ndarray = bow_spmatrix.toarray()
+    bow_frame = pd.DataFrame(bow_ndarray)
+
+    filtered_bow_spmatrix = to_bag_of_words(filtered_raw_frame, textcolumn, vocab)
+    filtered_bow_ndarray = filtered_bow_spmatrix.toarray()
+    # filtered_bow_frame = pd.DataFrame(filtered_bow_ndarray)
     time_get_vocab_and_bow_af = time.time()
     print('[INFO] Getting vocab and bow took ' + str(time_get_vocab_and_bow_af - time_get_vocab_and_bow_bf))
 
     # Train the coefficients for the vectorspace factors to predict the bag of words
     time_train_model_bf = time.time()
-    (weights_frame, biases) = logistic_regression(vec_frame.iloc[:,1:], M)
-    # Obtain the softmax predictions
+
+    # Only train on instances with non-empty texts
+    (weights_frame, biases) = logistic_regression(filtered_vec_frame.iloc[:,1:], filtered_bow_ndarray)
+    # Obtain the softmax predictions for all instances
     softmax_frame = vec_frame.iloc[:,1:].dot(weights_frame.values) + biases
     time_train_model_af = time.time()
     print('[INFO] Training model took ' + str(time_get_data_af - time_get_data_bf))
@@ -266,41 +278,39 @@ if (textcolumn != ''):
     ### Cluster points based on various metrics and evaluating each clustering ###
     sf = open(scorefile,'a+')
     time_clusters_bf = time.time()
-    print('[INFO] Clustering using')
-    print(cluster_input)
     for elem in cluster_input:
-        print(elem)
+        print('[INFO] Clustering using ' + elem)
         if elem == 'softmax':
-            print('[DEBUG] softmax detected')
-            clusters = cluster(softmax_frame)
+            clusters = cluster(softmax_frame) + 1
         elif elem == 'bow':
-            print('[DEBUG] bow detected')
-            clusters = cluster(bow_frame)
+            # Do not cluster those without any words
+            clusters = np.zeros(len(raw_frame[textcolumn]), dtype=np.int)
+            clusters[nonempty_indices] = cluster(filtered_bow_ndarray) + 1
         else:
-            print('[DEBUG] ' + elem + ' detected')
-            # clusters = cluster(raw_frame[[elem]])
-            clusters = raw_frame[[elem]]
+            if (np.issubdtype(df['A'].dtype, np.number)):
+                clusters = raw_frame[[elem]] + 1
+            else:
+                print('[ERROR] feature ' + elem + ' is not numeric')
         print('[DEBUG] Got clusters: ')
         print(clusters)
         # Save cluster assignments to dataframe
         raw_frame[elem + '_cluster'] = clusters
         # Evaluate the clustering's cosine proximity
-        print('[INFO] Evaluating clustering using')
-        print(cluster_eval)
         for el in cluster_eval:
-            print(el)
+            print('[INFO] Evaluating clustering using ' + el)
             if el == 'vector':
-                print('[DEBUG] vector detected')
                 eval_by = vec_frame.iloc[:,1:]
             elif el == '2d':
-                print('[DEBUG] bow detected')
                 eval_by = raw_frame[['x', 'y']]
-                print(eval_by)
-                print(type(eval_by))
             else:
-                print('[DEBUG] ' + elem + ' detected')
-                eval_by = raw_frame[[el]]
-            silhouette_avg = silhouette_score(eval_by, clusters, metric='cosine')
+                if (np.issubdtype(df['A'].dtype, np.number)):
+                    eval_by = raw_frame[[el]]
+                else:
+                    print('[ERROR] feature ' + elem + ' is not numeric')
+            if (elem == 'bow'):
+                silhouette_avg = silhouette_score(eval_by.iloc[nonempty_indices,:], clusters[nonempty_indices], metric='cosine')
+            else:
+                silhouette_avg = silhouette_score(eval_by, clusters, metric='cosine')
             print('Score--' + outputfilename + '\t'+elem+'\t'+el+'\t' + str(silhouette_avg))
             sf.write('\n' + outputfilename + '\t'+elem+'\t'+el+'\t' + str(silhouette_avg))
     time_clusters_af = time.time()
