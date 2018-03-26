@@ -30,20 +30,22 @@ tf_bias = -999
 num_epochs = 5
 write_directory = './'
 scorefile = './scorefile.txt'
+finishedfile = './finishedfile.txt'
 
 try:
-    opts, args = getopt.getopt(sys.argv[1:], 'hv:r:t:d:s:k:b:e:i:n:l:')
+    opts, args = getopt.getopt(sys.argv[1:], 'hv:r:t:d:s:f:k:b:e:i:n:l:')
 except getopt.GetoptError:
-    print('\npython3 semantic_model.py -v <vectorfile> -r <rawfile> -t <textcolumn> [-d <write_directory> (if not current directory) -s <scorefile_location> (if not ./scorefile.txt) -k <num_clusters> -b <tf_bias> -e <num_epochs> -i <use_idf> -n <cluster_input> -l <cluster_eval>]')
+    print('\npython3 semantic_model.py -v <vectorfile> -r <rawfile> -t <textcolumn> [-d <write_directory> (if not current directory) -s <scorefile_location> (if not ./scorefile.txt) -f <finishedfile_location> (if not ./finishedfile.txt) -k <num_clusters> -b <tf_bias> -e <num_epochs> -i <use_idf> -n <cluster_input> -l <cluster_eval>]')
     sys.exit(2)
 
 for opt, arg in opts:
     if opt == '-h':
-        print('\npython3 semantic_model.py -v <vectorfile> -r <rawfile> -t <textcolumn> [-d <write_directory> (if not current directory) -s <scorefile_location> (if not ./scorefile.txt) -k <num_clusters> -b <tf_bias> -e <num_epochs> -i <use_idf> -n <cluster_input> -l <cluster_eval>]')
+        print('\npython3 semantic_model.py -v <vectorfile> -r <rawfile> -t <textcolumn> [-d <write_directory> (if not current directory) -s <scorefile_location> (if not ./scorefile.txt) -f <finishedfile_location> (if not ./finishedfile.txt) -k <num_clusters> -b <tf_bias> -e <num_epochs> -i <use_idf> -n <cluster_input> -l <cluster_eval>]')
         print('<vectorfile> is the high dimensional vector\n<rawfile> is the original input data')
         print('<textcolumn> is a column in raw file that needs nltk processing')
-        print('write_directory is where you would like to save the output files')
-        print('scorefile_location is where you would like the scores to be saved')
+        print('<write_directory> is where you would like to save the output files')
+        print('<scorefile_location> is where you would like the scores to be saved')
+        print('<finishedfile_location> is where you would like the scores to be saved')
         print('<num_clusters> is the number of clusters to bin the data into (default 5)')
         print('<tf_bias> is the bias constant for term-frequency')
         print('<num_epochs> is the number of epochs to train the logistic regression model for (default 5)')
@@ -66,6 +68,9 @@ for opt, arg in opts:
     if opt in ("-s"):
         print('[INFO] setting -s')
         scorefile = arg
+    if opt in ("-f"):
+        print('[INFO] setting -f')
+        finishedfile = arg
     if opt in ("-k"):
         print('[INFO] setting -k')
         num_clusters = int(arg)
@@ -345,5 +350,9 @@ print('[INFO] Moving tsv files to txt took ' + str(time_txt_files_af - time_txt_
 # subprocess.call('mv VS-*.txt ' + write_directory, shell=True)
 # subprocess.call('mv *semantic*.txt ' + write_directory, shell=True)
 timeaf = time.time()
+
+ff = open(finishedfile, 'a+')
+ff.write(outputfilename)
+ff.close()
 print('[INFO] End time: ' + str(timeaf))
 print('[INFO] TOTAL time:', timeaf-timebf)
