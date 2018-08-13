@@ -42,7 +42,8 @@ Where  `vectorfile` and `rawfile` are outputs from `representation_presenter.py`
     -p predict
     -n cluster_input
     -l cluster_eval
-Where `write_directory` is where you would like to save the output files to, `scorefile_location` is where you would like the clustering scores to be written to, `finishedfile_location` is where you would like the completion of a run to be recorded, `num_clusters` is the number of clusters you would like to classify your data into, `tf_bias` is the term-frequency bias (not currently in use), `num_epochs` is the number of epochs to train logistic regression for, `use_idf` is whether or not to use inverse document frequency in tf-TfidfVectorizer, and `predict` is whether or not to extrapolate the motivations of the no-response entries.
+Where `write_directory` is where you would like to save the output files to, `scorefile_location` is where you would like the clustering scores to be written to, `finishedfile_location` is where you would like the completion of a run to be recorded, `num_clusters` is the number of clusters you would like to classify your data into, `tf_bias` is the term-frequency bias, `num_epochs` is the number of epochs to train logistic regression for, `use_idf` is whether or not to use inverse document frequency in tf-TfidfVectorizer, and 'predict' is whether or not to extrapolate the motivations of the no-response entries.
+
 
 `cluster_input` is which word representation input to use for clustering: "bow" for the actual bag of words of the point or "softmax" for the logistic regression model's prediction of words for the point, any other string will output scores corresponding to both inputs. `cluster_eval` is which vector space to calculate the silhouette score of the clusterings: "vector" for full vector space or "2d" for the tSNE reduced vector space, any other string will evaluate to outputting scores corresponding to both vector spaces.
 
