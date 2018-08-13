@@ -32,10 +32,13 @@ write_directory = './'
 scorefile = './scorefile.txt'
 finishedfile = './finishedfile.txt'
 
+predict = False
+
+
 try:
-    opts, args = getopt.getopt(sys.argv[1:], 'hv:r:t:d:s:f:k:b:e:i:n:l:')
+    opts, args = getopt.getopt(sys.argv[1:], 'hv:r:t:d:s:f:k:b:e:i:p:n:l:')
 except getopt.GetoptError:
-    print('\npython3 semantic_model.py -v <vectorfile> -r <rawfile> -t <textcolumn> [-d <write_directory> (if not current directory) -s <scorefile_location> (if not ./scorefile.txt) -f <finishedfile_location> (if not ./finishedfile.txt) -k <num_clusters> -b <tf_bias> -e <num_epochs> -i <use_idf> -n <cluster_input> -l <cluster_eval>]')
+    print('\npython3 semantic_model.py -v <vectorfile> -r <rawfile> -t <textcolumn> [-d <write_directory> (if not current directory) -s <scorefile_location> (if not ./scorefile.txt) -f <finishedfile_location> (if not ./finishedfile.txt) -k <num_clusters> -b <tf_bias> -e <num_epochs> -i <use_idf> -p <predict> -n <cluster_input> -l <cluster_eval>]')
     sys.exit(2)
 
 for opt, arg in opts:
@@ -50,6 +53,7 @@ for opt, arg in opts:
         print('<tf_bias> is the bias constant for term-frequency')
         print('<num_epochs> is the number of epochs to train the logistic regression model for (default 5)')
         print('<use_idf> is either True or False (default) for using idf')
+        print('<predict> is either True or False (default) for doing predictions on what empty entries might be')
         print('<cluster_input> is a '+'-separated (no spaces) list like softmax+bow (default)')
         print('<cluster_eval> is a '+'-separated (no spaces) list like vector+2d (default)')
         sys.exit()
@@ -83,6 +87,9 @@ for opt, arg in opts:
     if opt in ("-i"):
         print('[INFO] setting -i')
         use_idf = arg
+    if opt in ("-p"):
+        print('[INFO] setting -p')
+        predict = arg.lower()
     if opt in ("-n"):
         print('[INFO] setting -n')
         print(arg)
@@ -97,6 +104,7 @@ for opt, arg in opts:
         cluster_eval = cluster_eval.split("+")
         print('[DEBUG] cluster evals: ')
         print(cluster_eval)
+         
 if vectorfile == '':
     print('[DEBUG] option [-v] must be set\n')
     sys.exit()
@@ -194,8 +202,10 @@ def logistic_regression(X, Y):
     biases = model.layers[1].get_weights()[1]
     weights_frame = pd.DataFrame(weights)
     biases_frame = pd.DataFrame(biases)
-    weights_frame.to_csv(outputfile+'_weights.tsv', sep = '\t', index = False)
-    biases_frame.to_csv(outputfile+'_biases.tsv', sep = '\t', index = False)
+    weights_frame.to_csv(outputfile+'_weights.txt', sep = '\t', index = False)
+    subprocess.call('mv '+ outputfile+'_weights.txt ' + write_directory, shell=True)
+    biases_frame.to_csv(outputfile+'_biases.txt', sep = '\t', index = False)
+    subprocess.call('mv '+ outputfile+'_biases.txt ' + write_directory, shell=True)
     return(weights_frame, biases)
 
 @timeout_decorator.timeout(3600, exception_message='timeout occured at cluster')
@@ -262,30 +272,31 @@ if (textcolumn != ''):
 
     # Train the coefficients for the vectorspace factors to predict the bag of words
     time_train_model_bf = time.time()
+    
+    if predict:
+        # Only train on instances with non-empty texts
+        (weights_frame, biases) = logistic_regression(filtered_vec_frame.iloc[:,1:], filtered_bow_ndarray)
+        # Obtain the softmax predictions for all instances
+        softmax_frame = vec_frame.iloc[:,1:].dot(weights_frame.values) + biases
+        time_train_model_af = time.time()
+        print('[INFO] Training model took ' + str(time_get_data_af - time_get_data_bf))
 
-    # Only train on instances with non-empty texts
-    (weights_frame, biases) = logistic_regression(filtered_vec_frame.iloc[:,1:], filtered_bow_ndarray)
-    # Obtain the softmax predictions for all instances
-    softmax_frame = vec_frame.iloc[:,1:].dot(weights_frame.values) + biases
-    time_train_model_af = time.time()
-    print('[INFO] Training model took ' + str(time_get_data_af - time_get_data_bf))
-
-    # From the softmax predictions, save the top 10 predicted words for each data point
-    time_get_top_predictions_bf = time.time()
-    print('[INFO] Sorting classification results...')
-    sorted_frame = np.argsort(softmax_frame,axis=1).iloc[:,-num_top_words:]
-    for i in range(num_top_words):
-        new_col = vocab_frame.iloc[sorted_frame.iloc[:,i],0] # get the ith top vocab word for each entry
-        raw_frame['predicted_word_' + str(num_top_words-i)] = new_col.values
-    time_get_top_predictions_af = time.time()
-    print('[INFO] Getting top predictions for each point took ' + str(time_get_top_predictions_af - time_get_top_predictions_bf))
+        # From the softmax predictions, save the top 10 predicted words for each data point
+        time_get_top_predictions_bf = time.time()
+        print('[INFO] Sorting classification results...')
+        sorted_frame = np.argsort(softmax_frame,axis=1).iloc[:,-num_top_words:]
+        for i in range(num_top_words):
+            new_col = vocab_frame.iloc[sorted_frame.iloc[:,i],0] # get the ith top vocab word for each entry
+            raw_frame['predicted_word_' + str(num_top_words-i)] = new_col.values
+        time_get_top_predictions_af = time.time()
+        print('[INFO] Getting top predictions for each point took ' + str(time_get_top_predictions_af - time_get_top_predictions_bf))
 
     ### Cluster points based on various metrics and evaluating each clustering ###
     sf = open(scorefile,'a+')
     time_clusters_bf = time.time()
     for elem in cluster_input:
         print('[INFO] Clustering using ' + elem)
-        if elem == 'softmax':
+        if (elem == 'softmax' and predict):
             clusters = cluster(softmax_frame) + 1
         elif elem == 'bow':
             # Do not cluster those without any words
@@ -313,6 +324,7 @@ if (textcolumn != ''):
                 else:
                     print('[ERROR] feature ' + elem + ' is not numeric')
             if (elem == 'bow'):
+		# Don't evaluate default 0 clusters
                 silhouette_avg = silhouette_score(eval_by.iloc[nonempty_indices,:], clusters[nonempty_indices], metric='cosine')
             else:
                 silhouette_avg = silhouette_score(eval_by, clusters, metric='cosine')
@@ -330,29 +342,22 @@ bow_frame.to_csv(outputfile+'_bow.tsv', sep = '\t', index = False)
 time_writing_files_af = time.time()
 print('[INFO] Writing new raw_frame and bow_frame to file took ' + str(time_writing_files_af - time_writing_files_bf))
 
-print('[INFO] Moving tsv files to txt for gzip')
+# Moving tsv files to txt for gzip
 time_txt_files_bf = time.time()
-subprocess.call('mv '+ outputfile+'_weights.tsv' + ' ' + outputfile+'_weights.txt', shell=True)
-subprocess.call('mv '+ outputfile+'_biases.tsv' + ' ' + outputfile+'_biases.txt', shell=True)
 subprocess.call('mv '+ outputfile + '_vocab.tsv' + ' ' + outputfile + '_vocab.txt', shell=True)
 subprocess.call('mv '+ outputfile+'.tsv' + ' ' + outputfile+'.txt', shell=True)
 subprocess.call('mv '+ outputfile+'_bow.tsv' + ' ' + outputfile+'_bow.txt', shell=True)
 subprocess.call('cp '+ vectorfile + ' ' + re.split("\.t.{0,3}", vectorfile)[0]+'.txt', shell=True)
 
-subprocess.call('mv '+ outputfile+'_weights.txt ' + write_directory, shell=True)
-subprocess.call('mv '+ outputfile+'_biases.txt ' + write_directory, shell=True)
 subprocess.call('mv '+ outputfile + '_vocab.txt ' + write_directory, shell=True)
 subprocess.call('mv '+ outputfile+'.txt ' + write_directory, shell=True)
 subprocess.call('mv '+ outputfile+'_bow.txt ' + write_directory, shell=True)
 subprocess.call('mv '+ re.split("\.t.{0,3}", vectorfile)[0]+'.txt ' + write_directory, shell=True)
 time_txt_files_af = time.time()
-print('[INFO] Moving tsv files to txt took ' + str(time_txt_files_af - time_txt_files_bf))
-# subprocess.call('mv VS-*.txt ' + write_directory, shell=True)
-# subprocess.call('mv *semantic*.txt ' + write_directory, shell=True)
 timeaf = time.time()
 
 ff = open(finishedfile, 'a+')
-ff.write(outputfilename)
+ff.write('\n' + outputfilename)
 ff.close()
 print('[INFO] End time: ' + str(timeaf))
 print('[INFO] TOTAL time:', timeaf-timebf)
