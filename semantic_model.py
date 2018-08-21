@@ -296,14 +296,16 @@ if (textcolumn != ''):
     time_clusters_bf = time.time()
     for elem in cluster_input:
         print('[INFO] Clustering using ' + elem)
-        if (elem == 'softmax' and predict):
+        if (elem == 'softmax'):
+            if predict:
+                continue 
             clusters = cluster(softmax_frame) + 1
         elif elem == 'bow':
             # Do not cluster those without any words
             clusters = np.zeros(len(raw_frame[textcolumn]), dtype=np.int)
             clusters[nonempty_indices] = cluster(filtered_bow_ndarray) + 1
         else:
-            if (np.issubdtype(df['A'].dtype, np.number)):
+            if (np.issubdtype(df[elem].dtype, np.number)):
                 clusters = raw_frame[[elem]] + 1
             else:
                 print('[ERROR] feature ' + elem + ' is not numeric')
@@ -319,7 +321,7 @@ if (textcolumn != ''):
             elif el == '2d':
                 eval_by = raw_frame[['x', 'y']]
             else:
-                if (np.issubdtype(df['A'].dtype, np.number)):
+                if (np.issubdtype(df[elem].dtype, np.number)):
                     eval_by = raw_frame[[el]]
                 else:
                     print('[ERROR] feature ' + elem + ' is not numeric')
